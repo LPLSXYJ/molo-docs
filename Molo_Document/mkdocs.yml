@@ -1,0 +1,62 @@
+site_name: Molo Documentation
+site_description: Molo spatial omics analysis workflow documentation
+site_url: https://lplsxyj.github.io/Molo-docs/
+docs_dir: source
+site_dir: site
+strict: true
+
+theme:
+  name: material
+  language: zh
+  logo: assets/molo.svg
+  favicon: assets/molo.svg
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - content.tabs.link
+    - search.highlight
+    - search.suggest
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+
+nav:
+  - 首页: index.md
+  - 快速开始: getting-started.md
+  - 数据准备: data-preparation.md
+  - Web 工作流: web-workflow.md
+  - Python 命令行: python-cli.md
+  - R 函数参考: r-functions.md
+  - 结果文件: results.md
+  - HTTP API: api.md
+  - Web 服务部署: deployment.md
+  - 文档站部署: documentation-site.md
+  - FAQ: faq.md
+
+plugins:
+  - search:
+      lang: zh
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - assets/stylesheets/extra.css
