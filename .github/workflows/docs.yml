@@ -29,6 +29,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r Molo_Document/requirements-docs.txt
       - run: mkdocs build -f Molo_Document/mkdocs.yml --strict
+      - run: mkdocs build -f Molo_Document/mkdocs.en.yml --strict
       - uses: actions/upload-pages-artifact@v3
         with:
           path: Molo_Document/site
@@ -42,4 +43,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-

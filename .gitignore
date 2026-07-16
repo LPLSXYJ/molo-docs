@@ -1,6 +1,7 @@
+.venv/
 **/.venv/
 **/venv/
-**/site/
+Molo_Document/site/
 **/__pycache__/
 *.py[cod]
 
