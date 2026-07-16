@@ -1,6 +1,6 @@
 site_name: Molo Documentation
 site_description: Molo spatial omics analysis workflow documentation
-site_url: https://lplsxyj.github.io/molo-docs/en/
+site_url: https://docs.molopipeline.site/en/
 docs_dir: source_en
 site_dir: site/en
 strict: true
@@ -26,10 +26,10 @@ theme:
 extra:
   alternate:
     - name: English
-      link: /molo-docs/en/
+      link: /en/
       lang: en
     - name: 简体中文
-      link: /molo-docs/
+      link: /
       lang: zh
 
 nav:
