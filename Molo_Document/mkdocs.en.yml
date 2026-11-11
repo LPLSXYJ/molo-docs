@@ -1,71 +1,67 @@
 site_name: Molo Documentation
-site_description: Molo spatial omics analysis workflow documentation
+site_description: Current Molo spatial-omics workflow, R functions, Python CLI, and
+  FastAPI reference
 site_url: https://docs.molopipeline.site/en/
+repo_url: https://github.com/AI4Bread/Molo-tutorial
+repo_name: AI4Bread/Molo-tutorial
+edit_uri: ''
 docs_dir: source_en
 site_dir: site/en
 strict: true
-
 theme:
   name: material
   language: en
   logo: assets/molo.svg
   favicon: assets/molo.svg
-  features:
-    - navigation.sections
-    - navigation.top
-    - navigation.indexes
-    - content.code.copy
-    - content.tabs.link
-    - search.highlight
-    - search.suggest
   palette:
-    - scheme: default
-      primary: teal
-      accent: amber
-
-extra:
-  alternate:
-    - name: English
-      link: /en/
-      lang: en
-    - name: 简体中文
-      link: /
-      lang: zh
-
-nav:
-  - Home: index.md
-  - Getting Started: getting-started.md
-  - Data Preparation: data-preparation.md
-  - Web Workflow: web-workflow.md
-  - Python CLI: python-cli.md
-  - R Function Reference: r-functions.md
-  - Result Files: results.md
-  - HTTP API: api.md
-  - Web Service Deployment: deployment.md
-  - Documentation Site Deployment: documentation-site.md
-  - FAQ: faq.md
-
+    primary: teal
+    accent: amber
+  features:
+  - navigation.sections
+  - navigation.top
+  - navigation.indexes
+  - content.code.copy
+  - search.highlight
 plugins:
-  - search:
-      lang: en
-
+- search:
+    lang: en
 markdown_extensions:
-  - admonition
-  - attr_list
-  - def_list
-  - footnotes
-  - md_in_html
-  - tables
-  - toc:
-      permalink: true
-  - pymdownx.details
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.superfences
-  - pymdownx.tabbed:
-      alternate_style: true
-
-extra_css:
-  - assets/stylesheets/extra.css
+- admonition
+- attr_list
+- tables
+- toc:
+    permalink: true
+- pymdownx.details
+- pymdownx.superfences
+nav:
+- Home: index.md
+- Get started:
+  - Introduction: introduction.md
+  - Model architecture: architecture.md
+  - Installation: getting-started.md
+  - Data preparation: data-preparation.md
+  - Web workflow: web-workflow.md
+  - Basic R pipeline: basic-pipeline.md
+- Reference:
+  - R functions: r-functions.md
+  - Complete R parameters: reference/r-parameters.md
+  - Python CLI: python-cli.md
+  - Complete CLI options: reference/cli-options.md
+  - HTTP API: api.md
+  - Complete HTTP routes: reference/http-routes.md
+  - Defaults and tuning: parameters.md
+  - Results and limitations: results.md
+- Operations:
+  - Server deployment: deployment.md
+  - Documentation maintenance: documentation-site.md
+  - Version and source provenance: provenance.md
+  - FAQ: faq.md
+extra:
+  generator: false
+  alternate:
+  - name: English
+    link: /en/
+    lang: en
+  - name: 简体中文
+    link: /
+    lang: zh

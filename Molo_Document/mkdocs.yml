@@ -4,68 +4,68 @@ site_url: https://docs.molopipeline.site/
 docs_dir: source
 site_dir: site
 strict: true
-
 theme:
   name: material
   language: zh
   logo: assets/molo.svg
   favicon: assets/molo.svg
   features:
-    - navigation.sections
-    - navigation.top
-    - navigation.indexes
-    - content.code.copy
-    - content.tabs.link
-    - search.highlight
-    - search.suggest
+  - navigation.sections
+  - navigation.top
+  - navigation.indexes
+  - content.code.copy
+  - content.tabs.link
+  - search.highlight
+  - search.suggest
   palette:
-    - scheme: default
-      primary: teal
-      accent: amber
-
+  - scheme: default
+    primary: teal
+    accent: amber
 extra:
   alternate:
-    - name: 简体中文
-      link: /
-      lang: zh
-    - name: English
-      link: /en/
-      lang: en
-
+  - name: 简体中文
+    link: /
+    lang: zh
+  - name: English
+    link: /en/
+    lang: en
 nav:
-  - 首页: index.md
-  - 快速开始: getting-started.md
-  - 数据准备: data-preparation.md
-  - Web 工作流: web-workflow.md
-  - Python 命令行: python-cli.md
-  - R 函数参考: r-functions.md
-  - 结果文件: results.md
-  - HTTP API: api.md
-  - Web 服务部署: deployment.md
-  - 文档站部署: documentation-site.md
-  - FAQ: faq.md
-
+- 首页: index.md
+- 模型架构: architecture.md
+- 快速开始: getting-started.md
+- 数据准备: data-preparation.md
+- Web 工作流: web-workflow.md
+- R 函数: r-functions.md
+- R 完整参数: reference/r-parameters.md
+- Python CLI: python-cli.md
+- CLI 完整参数: reference/cli-options.md
+- HTTP API: api.md
+- HTTP 完整路由: reference/http-routes.md
+- 参数与调参: parameters.md
+- 结果与限制: results.md
+- 服务部署: deployment.md
+- 文档同步: documentation-site.md
+- 版本与来源: provenance.md
+- FAQ: faq.md
 plugins:
-  - search:
-      lang: zh
-
+- search:
+    lang: zh
 markdown_extensions:
-  - admonition
-  - attr_list
-  - def_list
-  - footnotes
-  - md_in_html
-  - tables
-  - toc:
-      permalink: true
-  - pymdownx.details
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
-  - pymdownx.superfences
-  - pymdownx.tabbed:
-      alternate_style: true
-
+- admonition
+- attr_list
+- def_list
+- footnotes
+- md_in_html
+- tables
+- toc:
+    permalink: true
+- pymdownx.details
+- pymdownx.highlight:
+    anchor_linenums: true
+- pymdownx.inlinehilite
+- pymdownx.snippets
+- pymdownx.superfences
+- pymdownx.tabbed:
+    alternate_style: true
 extra_css:
-  - assets/stylesheets/extra.css
+- assets/stylesheets/extra.css

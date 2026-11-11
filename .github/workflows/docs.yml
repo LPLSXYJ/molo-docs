@@ -1,42 +1,52 @@
 name: Documentation
-
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
+  pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
           cache: pip
           cache-dependency-path: Molo_Document/requirements-docs.txt
-      - run: python -m pip install --upgrade pip
       - run: python -m pip install -r Molo_Document/requirements-docs.txt
+      - id: canonical
+        run: |
+          python - <<'PY'
+          import json, os, re
+          revision = json.load(open('Molo_Document/canonical-source.json'))['canonical_revision']
+          assert re.fullmatch(r'[a-f0-9]{40}', revision)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as handle:
+              handle.write('revision=' + revision + '\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: AI4Bread/Molo-tutorial
+          ref: ${{ steps.canonical.outputs.revision }}
+          path: .canonical
+      - run: python .canonical/scripts/export_selfhosted.py --destination Molo_Document --check
       - run: mkdocs build -f Molo_Document/mkdocs.yml --strict
       - run: mkdocs build -f Molo_Document/mkdocs.en.yml --strict
+      - run: python scripts/check_documentation.py
       - uses: actions/upload-pages-artifact@v3
         with:
           path: Molo_Document/site
-
   deploy:
+    if: github.event_name != 'pull_request' && github.repository == 'LPLSXYJ/molo-docs'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

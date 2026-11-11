@@ -1,167 +1,93 @@
-# Documentation Site Deployment
+# Documentation maintenance
 
-This documentation site is built with MkDocs Material. The Chinese source is in `Molo_Document/source/`, the English source is in `Molo_Document/source_en/`, and the dependency file is `Molo_Document/requirements-docs.txt`.
+## English defaults and preserved URLs
 
-The Chinese site uses `Molo_Document/mkdocs.yml` and is published at the site root. The English site uses `Molo_Document/mkdocs.en.yml` and is published under `/en/`.
+Read the Docs project `molo-docs` is connected to
+[AI4Bread/Molo-tutorial](https://github.com/AI4Bread/Molo-tutorial), branch `main`,
+default version `latest`, language English. The site uses MkDocs Material with
+explicit English UI/search settings. Historical addresses `/api/`, `/web/`,
+`/installation/`, `/basic_pipeline/`, and `/FAQ/` remain present.
 
-## Local Preview
+## Two publishing targets, one English source
 
-From the repository root:
+`AI4Bread/Molo-tutorial/docs/` is the canonical English source for both sites.
+The Molo navigation dropdown preserves **Self-hosted Documentation** and
+**Read the Docs**, both opening a separate tab. No domain is removed.
 
-```bash
-cd Molo_Document
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements-docs.txt
-mkdocs serve -f mkdocs.yml
-```
-
-Open the local address printed by the terminal to preview the Chinese site.
-
-Preview the English site on another port:
+The bilingual deployment remains in `LPLSXYJ/molo-docs`; its English pages are
+exported from a pinned canonical Git commit instead of being maintained as a
+second divergent tutorial. Chinese pages are translations/maintenance material;
+exact parameter signatures remain in the shared generated tables.
 
 ```bash
-mkdocs serve -f mkdocs.en.yml -a 127.0.0.1:8001
+python scripts/export_selfhosted.py --destination /path/to/molo-docs/Molo_Document
+python scripts/export_selfhosted.py --destination /path/to/molo-docs/Molo_Document --check
 ```
 
-## Static Build
+The exporter preserves old self-hosted paths: `/api/` remains HTTP API there,
+whereas RTD `/api/` is the R reference. It rewrites relative links explicitly;
+never redirect identical path strings between the two sites without a map.
+`canonical-source.json` records the revision and file hashes. Self-hosted CI checks
+that the mirror still matches that pinned revision. To publish a new revision,
+update the exported files/manifest together and review/merge it in that repository.
+Building locally or updating a server checkout does not publish GitHub Pages.
+
+If only Read the Docs is retained later, preserve the self-hosted legacy URLs
+with page-specific redirects and retain the canonical source/history. No such
+removal or domain migration is performed by this update.
+
+## Read the Docs configuration
+
+`.readthedocs.yaml` selects Ubuntu 24.04, Python 3.12, `mkdocs.yml`, strict warnings,
+and `requirements-docs.txt`. Only documentation packages are installed. Never
+execute a scientific workflow, import the application, load production secrets,
+or require a GPU during the documentation build.
+
+The primary docs dependencies are pinned. Transitive dependencies remain resolved
+by pip; this is not a complete scientific or binary-environment lockfile.
+
+Official configuration reference:
+[Read the Docs configuration v2](https://docs.readthedocs.com/platform/stable/config-file/v2.html).
+
+## Source-to-document contract
 
 ```bash
-cd Molo_Document
-rm -rf site
-mkdocs build -f mkdocs.yml --strict
-mkdocs build -f mkdocs.en.yml --strict
+python scripts/capture_source_contract.py --source-root /path/to/authorized/Molo
+python scripts/render_reference.py
+python scripts/render_reference.py --check
+python -m unittest discover -s tests -v
+mkdocs build --strict
+python scripts/check_built_links.py
 ```
 
-Build outputs:
+Capture extracts public R signatures, Python parser defaults, mounted HTTP routes,
+JSON schemas, and file SHA-256 hashes **without executing the source**. Raw runtime
+configuration, data, credentials, accounts, and databases are not collected.
+Inspect diffs before publishing; review semantics and examples manually. Update
+audit dates/metadata only after inspecting a new authorized source snapshot.
 
-```text
-Molo_Document/site/      # Chinese root site
-Molo_Document/site/en/   # English site
-```
-
-`site/` is generated and does not need to be committed to Git.
-
-## GitHub Pages
-
-The repository provides `.github/workflows/docs.yml`. Release steps:
-
-1. Push the source to GitHub.
-2. Open Pages in repository settings.
-3. Set Source to `GitHub Actions`.
-4. Push to `main` or `master`, or manually run the `Documentation` workflow.
-
-The workflow runs:
+To detect drift against a previously captured source:
 
 ```bash
-python -m pip install -r Molo_Document/requirements-docs.txt
-mkdocs build -f Molo_Document/mkdocs.yml --strict
-mkdocs build -f Molo_Document/mkdocs.en.yml --strict
+python scripts/capture_source_contract.py \
+  --source-root /path/to/authorized/Molo --check
 ```
 
-Then it uploads `Molo_Document/site/` as the Pages artifact. The language selector in the page header links between the Chinese root site and the English `/en/` site.
+Generated tables are deterministic and checked by GitHub Actions. Semantic tests
+also reject obsolete per-job email verification, stale Shiny instructions, old
+R arguments, and missing historical page routes.
 
-## Site URL
+## Publication acceptance
 
-The current configuration assumes this GitHub Pages URL:
+1. Build locally with strict mode and check local navigation/anchors.
+2. Review the source diff, generated tables, privacy scan, and CI results.
+3. Push the reviewed commit to the authorized repository branch.
+4. Confirm GitHub webhook delivery and a **new Read the Docs build**.
+5. Verify that the build succeeded for the **same pushed commit**, not an older one.
+6. Request live pages and inspect English language, new navigation, current
+   parameters, and preserved old URLs.
 
-```text
-https://lplsxyj.github.io/Molo-docs/
-```
-
-If the repository owner or repository name changes, update these fields before publishing:
-
-- `site_url` in `Molo_Document/mkdocs.yml`
-- `site_url` in `Molo_Document/mkdocs.en.yml`
-- `extra.alternate[*].link` in both MkDocs configuration files
-
-For example, a repository named `<user>/<repo>` should use:
-
-```text
-https://<user>.github.io/<repo>/
-https://<user>.github.io/<repo>/en/
-```
-
-and language links such as:
-
-```text
-/<repo>/
-/<repo>/en/
-```
-
-## ReadTheDocs
-
-The repository root provides `.readthedocs.yaml`:
-
-```yaml
-version: 2
-
-build:
-  os: ubuntu-24.04
-  tools:
-    python: "3.12"
-
-mkdocs:
-  configuration: Molo_Document/mkdocs.yml
-
-python:
-  install:
-    - requirements: Molo_Document/requirements-docs.txt
-```
-
-This ReadTheDocs configuration currently builds the Chinese MkDocs configuration. To publish English there as a separate project or version, point ReadTheDocs to `Molo_Document/mkdocs.en.yml`.
-
-## Repository Structure
-
-Recommended documentation structure:
-
-```text
-Molo_Document/
-  README.md
-  mkdocs.yml
-  mkdocs.en.yml
-  requirements-docs.txt
-  source/
-    index.md
-    getting-started.md
-    data-preparation.md
-    web-workflow.md
-    python-cli.md
-    r-functions.md
-    results.md
-    api.md
-    deployment.md
-    documentation-site.md
-    faq.md
-    assets/
-      molo.svg
-      stylesheets/
-        extra.css
-  source_en/
-    index.md
-    getting-started.md
-    data-preparation.md
-    web-workflow.md
-    python-cli.md
-    r-functions.md
-    results.md
-    api.md
-    deployment.md
-    documentation-site.md
-    faq.md
-    assets/
-      molo.svg
-      stylesheets/
-        extra.css
-```
-
-Before committing, check:
-
-```bash
-mkdocs build -f Molo_Document/mkdocs.yml --strict
-mkdocs build -f Molo_Document/mkdocs.en.yml --strict
-git status --short Molo_Document .github/workflows/docs.yml .readthedocs.yaml
-```
-
-Commit source, configuration, and workflow files. Do not commit `.venv/`, `site/`, production `.env`, or machine-specific configuration.
+A successful Git push or GitHub Actions run alone is not evidence that Read the
+Docs published the update. If no build starts, an administrator must check the
+project's repository integration/webhook or trigger a build. Never invent a
+Read the Docs token or share credentials in issues/commits.
