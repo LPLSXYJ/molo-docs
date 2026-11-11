@@ -1,110 +1,55 @@
-# Getting Started
+# Installation
 
-This page explains how to start the FastAPI version of Molo on a development machine or server. If you only want to preview pages, Python dependencies are enough. To run real analysis jobs, you also need the R/Conda/renv workers and a `downstream.yaml` configuration.
+## Hosted users: no local installation
 
-The commands below assume that you are running them from the repository root.
+Open [Molo](https://molo.ai4bread.com/), register or log in, and follow the
+[web workflow](web-workflow.md). The alternate address is
+[molopipeline.site](https://molopipeline.site/). Read-only reviewer access is
+available only when the administrator enables it.
 
-## Requirements
-
-| Item | Recommendation |
-| --- | --- |
-| Operating system | Linux server or Linux workstation |
-| Python | Python 3.12 preferred; CI uses Python 3.12 |
-| R | An R environment matching each `*_renv_project` lockfile |
-| Redis | 6.2+; Redis 7.2 recommended for production |
-| GPU | Optional; NVIDIA GPU recommended for spatial alignment/integration |
-| Memory | 8 GB minimum for small data; 32 GB+ recommended for real analysis |
-| Disk | Reserve space for uploads, outputs, Redis AOF, SQLite WAL, and result packages |
-
-## Install Python Web Dependencies
+## Documentation preview only
 
 ```bash
-cd Molo_FastAPI
-python -m venv .venv
+git clone https://github.com/AI4Bread/Molo-tutorial.git
+cd Molo-tutorial
+python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-docs.txt
+mkdocs build --strict
+mkdocs serve -a 127.0.0.1:8001
 ```
 
-For development, you can use the console mail backend. Production must use a real SMTP service, an HTTPS `PUBLIC_BASE_URL`, and long, distinct secrets.
+These packages build documentation. They do **not** install Molo's scientific
+Python/R stack. Port 8001 avoids the application's usual loopback port 8000.
 
-```bash
-export APP_ENV=development
-export PUBLIC_BASE_URL=http://127.0.0.1:8000
-export DOWNLOAD_TOKEN_SECRET=development-download-secret-at-least-32-chars
-export EMAIL_VERIFICATION_SECRET=development-email-secret-at-least-32-chars
-export MAIL_BACKEND=console
-export REDIS_URL=redis://127.0.0.1:6379/0
-export CELERY_BROKER_URL=redis://127.0.0.1:6379/0
-export CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/1
-```
+## Scientific or self-hosted installation
 
-## Prepare Downstream Configuration
+!!! warning "Obtain a matching complete source/environment release"
+    The audited server has intentional working-tree changes. Cloning an older
+    public commit or installing only `Molo_FastAPI/requirements.txt` is not enough
+    to reproduce the entire scientific environment. See [provenance](provenance.md).
 
-Copy the example configuration and adjust it to the server directories.
+The current implementation uses a Python 3.10 scientific environment on the
+examined host; this is an observed environment, not a declared minimum version.
+It requires PyTorch and associated numerical/graph packages plus R dependencies
+such as Seurat, Arrow, and analysis-specific packages. CellChat, trajectory, and
+ATAC workers have distinct environment/library needs. Match CUDA/PyTorch to the
+actual GPU; do not copy a GPU index from another host.
 
-```bash
-cp app/config/downstream.example.yaml app/config/downstream.yaml
-```
+Obtain from maintainers:
 
-Pay special attention to:
+1. A complete source snapshot matching the intended documentation revision.
+2. Conda/Python package specifications and matching R/renv environments.
+3. A portable downstream configuration with your own filesystem paths.
+4. Input data, preprocessing, and provenance sufficient for the workflow to run.
 
-- `project_root`: repository root directory.
-- `molo_source_dir`: `Molo_FastAPI/app/core/R`.
-- `default_output_root`: downstream result output directory; the runtime user must be able to write to it.
-- `runtime.alignment_default_device` and `runtime.alignment_allowed_devices`: GPUs allowed for use.
-- `envs.*.rscript`, `envs.*.conda_path`, `envs.*.r_lib`: R/Conda paths for each worker.
-- `workers.*`: worker scripts for object creation, dimensionality reduction, CellChat, trajectory, and ATAC.
-- `orchestrators.*`: orchestration scripts for different data types.
+Before accepting jobs, verify the web packages, the alignment worker's Python
+and `Rscript`, and each requested downstream worker. Keep trajectory and ATAC
+special environments distinct where configured. See [server deployment](deployment.md).
 
-## Start the Development Service
+## Container status
 
-At minimum, Redis, FastAPI, and a Celery worker are required. To match production behavior more closely, start both worker and beat.
-
-```bash
-redis-server --daemonize yes
-```
-
-Terminal 1:
-
-```bash
-cd Molo_FastAPI
-source .venv/bin/activate
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Terminal 2:
-
-```bash
-cd Molo_FastAPI
-source .venv/bin/activate
-celery -A app.celery_app:celery_app worker \
-  -Q analysis,alignment,notifications,packaging,maintenance \
-  --loglevel=INFO
-```
-
-Terminal 3:
-
-```bash
-cd Molo_FastAPI
-source .venv/bin/activate
-celery -A app.celery_app:celery_app beat --loglevel=INFO
-```
-
-Open:
-
-- Home: `http://127.0.0.1:8000/`
-- Alignment and integration: `http://127.0.0.1:8000/analyse/alignment/`
-- Visium downstream analysis: `http://127.0.0.1:8000/analyse/downstream/visium`
-- Health checks: `http://127.0.0.1:8000/health/live`, `http://127.0.0.1:8000/health/ready`
-
-## Basic Checks
-
-```bash
-cd Molo_FastAPI
-python -m compileall -q app tests
-python -m unittest discover -v
-python -m pip check
-```
-
-If only FastAPI is running and Celery is not running, pages can be opened, but submitted analyses will not be consumed by workers. If real SMTP is not configured, verification codes and result emails are written to the console mail backend in development.
+The historical page advertised a ready-made Docker environment without naming an
+image. **This documentation does not claim a verified public image/tag or provide
+an invented `docker pull` command.** Use the hosted service or a maintainer-supplied
+matching runtime until a versioned image is released and tested.

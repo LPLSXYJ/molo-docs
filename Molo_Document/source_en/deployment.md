@@ -1,174 +1,135 @@
-# Web Service Deployment
+# Server deployment
 
-This page describes the public deployment structure for the Molo FastAPI web service. In production, keep source code, runtime environments, configuration files, upload directories, output directories, and log directories separated. Public repositories should only contain source code, example configuration, and deployment templates. Machine-specific paths, secrets, and SMTP credentials should stay on the server.
+This guide is for maintainers. Hosted users should start with [Web workflow](web-workflow.md).
+Paths below are **portable examples**, not the audited server's private settings.
+No deployment commands are executed by the documentation build.
 
-## Service Components
+## Components and queues
 
-Recommended production components:
-
-| Service | Queue | Responsibility |
+| Component | Role | Template concurrency |
 | --- | --- | --- |
-| `molo-web` | none | FastAPI pages, verification codes, uploads, status, downloads |
-| `molo-celery@analysis` | `analysis` | Downstream analysis |
-| `molo-celery@alignment` | `alignment` | Alignment and integration, usually with limited GPU concurrency |
-| `molo-celery@notifications` | `notifications` | Verification and result emails |
-| `molo-celery@packaging` | `packaging` | Result ZIP packaging |
-| `molo-celery@maintenance` | `maintenance` | Queue recovery and expiration cleanup |
-| `molo-beat` | none | Periodic maintenance scheduling |
-| `molo-redis` | none | Celery broker, result backend, verification code state, and rate-limit state |
+| Redis | Broker and result backend; loopback only, durable persistence | N/A |
+| SQLite WAL | Accounts, sessions, jobs, projects, dataset records | N/A |
+| Web | `uvicorn app.main:app` behind HTTPS proxy | 2 |
+| `analysis` worker | Downstream orchestration | 3 |
+| `alignment` worker | Alignment/integration/tuning | 1 |
+| `notifications` worker | Auth and result email | 2 |
+| `packaging` worker | Safe download packages | 1 |
+| `maintenance` worker | Reconciliation and expiry cleanup | 1 |
+| Beat | Periodic reconciliation/cleanup publication | Exactly one scheduler |
 
-## Path Conventions
+Use Redis 6.2 or newer; deployment guidance recommends the 7.2 series. Match
+version/security requirements to your environment. Do not disable an unrelated
+Redis or replace another application's broker.
 
-The examples below use variables for machine directories. Set these variables on the server, or write equivalent paths into systemd units, environment files, and `downstream.yaml`.
+## Private environment
 
-```bash
-export MOLO_ROOT="<repository-root>"
-export MOLO_FASTAPI="$MOLO_ROOT/Molo_FastAPI"
-export MOLO_VENV="$MOLO_ROOT/.venv"
-export MOLO_ENV_FILE="<runtime-env-file>"
-export MOLO_OUTPUT_ROOT="$MOLO_ROOT/outputs/downstream"
-```
+Create a private, non-committed environment file from the matching source example.
+At minimum review:
 
-Do not commit the following to a public repository:
-
-- Production `.env`.
-- `Molo_FastAPI/app/config/downstream.yaml`.
-- Upload files, result directories, SQLite database, Redis AOF, logs, and download packages.
-- SMTP passwords, token secrets, private keys, and certificate private keys.
-
-## Environment Variables
-
-Create a server-local environment file from the example:
-
-```bash
-install -m 0600 "$MOLO_FASTAPI/.env.example" "$MOLO_ENV_FILE"
-```
-
-Production must configure:
-
-| Variable | Description |
+| Variable | Requirement |
 | --- | --- |
-| `APP_ENV=production` | Enables production validation |
-| `PUBLIC_BASE_URL` | External HTTPS address |
-| `DOWNLOAD_TOKEN_SECRET` | At least 32 characters; must differ from verification secret |
-| `EMAIL_VERIFICATION_SECRET` | At least 32 characters |
-| `JOB_DATABASE_PATH` | SQLite WAL database path |
-| `REDIS_URL` | Redis DB 0 |
-| `CELERY_BROKER_URL` | Redis DB 0 |
-| `CELERY_RESULT_BACKEND` | Redis DB 1 |
-| `MAIL_BACKEND=smtp` | Production must not use console/memory |
-| `SMTP_*` | SMTP host, port, account, and encryption settings |
-| `MAX_UPLOAD_BYTES` | Upload size limit |
-| `ANALYSIS_TIME_LIMIT_SECONDS` | Base Celery soft/hard time limit |
+| `APP_ENV` | `production` for a public deployment |
+| `PUBLIC_BASE_URL` | Canonical public HTTPS origin used by generated emails/download URLs |
+| `AUTH_SECRET`, `DOWNLOAD_TOKEN_SECRET` | Independent, non-placeholder secrets at least 32 characters |
+| `JOB_DATABASE_PATH` | Persistent writable SQLite database |
+| `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Explicit broker/backend databases on your dedicated Redis |
+| `MOLO_VENV` | Correct environment root containing web/worker executables |
+| `DOWNSTREAM_CONFIG_PATH` | Absolute path to your validated worker/runtime YAML |
+| `MAIL_BACKEND` and SMTP fields | Real encrypted SMTP in production; never publish credentials |
+| `MOLO_REVIEW_MODE_ENABLED` | Enable only after real demo artifacts/preflight are available |
+| `MOLO_ENABLE_SERVER_PATH_INPUT`, `MOLO_SERVER_PATH_ROOTS` | Disable or tightly allowlist; never expose arbitrary filesystem paths |
+| `MOLO_TUNING_ENABLED`, `MOLO_TUNE_MAX_TRIALS` | Search availability and maximum trial count |
+| `MAX_UPLOAD_BYTES`, `MAX_ALIGNMENT_UPLOAD_FILES`, `MAX_QUEUED_JOBS` | Resource/admission limits |
 
-Production startup rejects these configurations:
+Set all Redis variables explicitly. The application fallback for a missing result
+backend is `REDIS_URL`; it does not automatically select DB1. Template DB0/DB1 and
+a deployment's DB2/DB3 are different intentional configurations.
 
-- `PUBLIC_BASE_URL` is not HTTPS.
-- Secrets are too short, still `CHANGE_ME`, or both secrets are identical.
-- SMTP does not enable TLS/SSL.
-- The mail backend is still `console` or `memory`.
+The parser defaults include 50 queued jobs and a normal analysis limit of 86400
+seconds; tuning behavior differs. Upload/proxy limits and available disk must
+agree. Do not copy illustrative secrets or public hostnames without setting your own.
 
-## Downstream Configuration
+## Downstream YAML
 
-`Molo_FastAPI/app/config/downstream.yaml` is machine-specific and should not be committed to a public repository. Create it from `downstream.example.yaml` and adjust directories to paths available on the server.
+Copy `app/config/downstream.example.yaml` from the matching source and edit:
 
-```yaml
-project_root: "<repository-root>"
-molo_source_dir: "<repository-root>/Molo_FastAPI/app/core/R"
-default_output_root: "<output-root>"
+- `project_root`, `molo_source_dir`, `default_output_root`.
+- `runtime.alignment_default_device` and `alignment_allowed_devices`.
+- Scientific `conda_path`, `rscript`, and applicable `r_lib` values.
+- Trajectory environment, ATAC `macs2_env`, worker and orchestrator paths.
+- Concurrency, retention, and cleanup scheduling.
 
-runtime:
-  downstream_retention_hours: 48
-  cleanup_interval_minutes: 30
-  max_concurrent_jobs: 3
-  alignment_default_device: "cuda:0"
-  alignment_allowed_devices:
-    - "cuda:0"
-```
+The example YAML uses `cuda:0`; the examined R/CLI defaults use `cuda:1`.
+These are not interchangeable. Validate process-visible device numbering and
+ensure the requested default is in the configured pool.
 
-Path requirements:
+## Start with supervision
 
-- The FastAPI runtime user can read the repository source.
-- The runtime user can write to `Molo_FastAPI/data/`, `Molo_FastAPI/plots/`, and `default_output_root`.
-- Each `envs.*.rscript` points to the correct Rscript.
-- The ATAC `macs2_env` points to an environment containing MACS2.
+Inspect existing services before starting anything. The source supplies systemd
+units using `/opt/molo`, account `molo`, `/etc/molo/molo.env`, and `/var/lib/molo`.
+Adapt them to the actual install; do not copy them blindly into a different tree.
 
-## Start and Stop Order
+Typical order after backups/configuration review:
 
-Recommended first startup:
+1. Dedicated persistent Redis.
+2. Job/project/dataset schema initialization using the intended database.
+3. Required workers on the correct queues.
+4. Exactly one Beat scheduler, **only after** retention/reconciliation effects are reviewed.
+5. Web and HTTPS proxy, then public routing and health checks.
 
-```bash
-systemctl start molo-redis
-cd "$MOLO_FASTAPI"
-"$MOLO_VENV/bin/python" -c 'from app.services.job_repository import get_repository; get_repository()'
-systemctl start molo-celery@analysis molo-celery@alignment
-systemctl start molo-celery@notifications molo-celery@packaging molo-celery@maintenance
-systemctl start molo-beat
-systemctl start molo-web
-systemctl enable molo.target
-```
+Schema initialization and reviewer preflight can write databases and demonstration
+files. A temporary startup check should not automatically enable expiry cleanup
+of historical results. Detached processes do not provide reboot persistence or
+restart supervision; install and verify suitable service management for production.
 
-During releases or shutdowns, stop Web and Beat first, then stop workers so Celery warm shutdown has a chance to wait for active jobs.
+Example web/worker entry points, each in a managed service with the same private
+configuration loaded:
 
 ```bash
-systemctl stop molo-web molo-beat
-systemctl stop 'molo-celery@analysis' 'molo-celery@alignment'
-systemctl stop 'molo-celery@notifications' 'molo-celery@packaging' 'molo-celery@maintenance'
+cd /opt/molo/Molo_FastAPI
+export MOLO_VENV=/opt/molo/.venv
+# Load your reviewed private environment using your service manager.
+bash deploy/run-celery-worker.sh analysis
+# Other independent service instances: alignment, notifications, packaging, maintenance.
+# Web is a separate service:
+bash deploy/run-web.sh
 ```
 
-## Nginx
+The scripts use `exec` and run continuously; do not paste all commands into one
+foreground terminal expecting them to start sequentially.
 
-Nginx handles HTTPS termination, upload size limits, reverse proxying, and download endpoint forwarding. The template is:
+## HTTPS, tunnel, and domains
+
+A working SSH tunnel does not prove a working web ingress. Validate each hop:
 
 ```text
-Molo_FastAPI/deploy/nginx-molo.conf
+DNS -> public HTTPS gateway -> web tunnel/network -> private proxy -> 127.0.0.1:8000
 ```
 
-Check these items during deployment:
+Use a certificate covering the exact hostname, trusted proxy headers, appropriate
+upload/timeouts, and loopback/private upstream binding. A certificate for
+`molopipeline.site` does not cover `molo.ai4bread.com`. Two working domains do not
+share a login cookie automatically. Configure one canonical `PUBLIC_BASE_URL` for
+notifications and protect existing sites when adding a new virtual host.
 
-- `server_name` matches the domain in `PUBLIC_BASE_URL`.
-- Certificates and private keys stay only on the server.
-- `client_max_body_size` is no smaller than `MAX_UPLOAD_BYTES`.
-- `/results/download/`, `/jobs/`, `/analyse/`, and `/api/` are all proxied to FastAPI.
-- WebSocket or long-polling headers from the template are preserved.
-
-## Runtime Monitoring
+## Acceptance and backups
 
 ```bash
-curl --fail "$PUBLIC_BASE_URL/health/live"
-curl --fail "$PUBLIC_BASE_URL/health/ready"
-redis-cli ping
-"$MOLO_VENV/bin/celery" -A app.celery_app:celery_app inspect ping
-"$MOLO_VENV/bin/celery" -A app.celery_app:celery_app inspect active
-journalctl -u 'molo-*' --since today
-df -h "$MOLO_FASTAPI/data"
+curl --fail https://molo.ai4bread.com/health/live
+curl --fail https://molo.ai4bread.com/health/ready
+# With the matching scientific environment and private config loaded:
+celery -A app.celery_app:celery_app inspect ping
+celery -A app.celery_app:celery_app inspect active
+celery -A app.celery_app:celery_app inspect reserved
 ```
 
-Recommended alert items:
+Readiness checks database, Redis, disk, and configuration. Separately validate
+login, upload, a representative analysis, packaging, authorized download, and
+email delivery in an approved isolated run.
 
-- Readiness failure.
-- Redis AOF errors.
-- Missing worker heartbeat.
-- Reserved queue keeps growing.
-- Abnormal analysis failure rate.
-- Packaging failure.
-- SMTP rejection or retry spike.
-- Insufficient disk space.
-
-## Release Checks
-
-Before release, run:
-
-```bash
-cd "$MOLO_FASTAPI"
-python -m compileall -q app tests
-python -m unittest discover -v
-python -m pip check
-```
-
-After the public site is reachable, check:
-
-```bash
-curl --fail "$PUBLIC_BASE_URL/health/live"
-curl --fail "$PUBLIC_BASE_URL/health/ready"
-```
+Use coordinated backups of SQLite and Redis. Use SQLite's backup mechanism rather
+than copying only a live main file without WAL; do not copy a single Redis AOF
+segment as if it were the complete broker state. Keep schema/source/configuration
+versions together. Use warm worker shutdown and allow sufficient time for tuned
+jobs; do not force-kill unrelated scientific processes.

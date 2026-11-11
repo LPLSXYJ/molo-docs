@@ -1,99 +1,68 @@
 # FAQ
 
-## Why does the documentation focus on FastAPI Web?
+## Is this still a Shiny application?
 
-Molo's main user entry points are FastAPI Web, HTTP API, and Python CLI. R is still used by several backend workers, including object creation, dimensionality reduction and clustering, CellChat, Monocle3, and ATAC analysis. If you need to call R functions directly, see [R Function Reference](r-functions.md).
+No. The current online application is FastAPI/Celery/Redis with SQLite account
+and job state. Historical screenshots and `Molo_web()` instructions describe a
+different interface and are not the current deployment procedure.
 
-## The page opens, but jobs never start after submission
+## Is `/api/` the HTTP API?
 
-Usually Celery workers are not running or queues do not match. Check:
+It depends on the publishing target: RTD `/api/` is the [R function reference](r-functions.md),
+while self-hosted `/en/api/` is HTTP. Use the [HTTP API](api.md) link for
+web routes and authentication; do not assume identical legacy paths.
 
-```bash
-celery -A app.celery_app:celery_app inspect ping
-celery -A app.celery_app:celery_app inspect reserved
-redis-cli ping
-```
+## Do I need an email code for every job?
 
-Alignment jobs require the `alignment` queue, downstream analysis requires the `analysis` queue, packaging requires the `packaging` queue, and email delivery requires the `notifications` queue.
+No. Account registration/password reset uses codes; normal submissions use an
+authenticated account and its registered email. Do not use obsolete
+`/api/email-verifications` examples with the current application.
 
-## I cannot receive the verification code
+## Can reviewer mode run a new analysis?
 
-In development, if `MAIL_BACKEND=console` is used, the verification code only appears in the server log. In production, check:
+No. It is read-only demonstration access. Submit through a normal authorized
+account; do not try to bypass reviewer write restrictions.
 
-- `MAIL_BACKEND=smtp`.
-- `SMTP_HOST`, `SMTP_PORT`, account, and password are correct.
-- `SMTP_USE_TLS` and `SMTP_USE_SSL` are not both true.
-- `PUBLIC_BASE_URL` is an externally reachable HTTPS address.
-- Redis is available, because verification state is stored in Redis.
+## Can I integrate three or more batches?
 
-## The verification code is correct, but submission fails
+Not with the current full latent integration path. It requires exactly two.
+Multi-slice physical alignment is a separate mode and supports at least two slices.
 
-Verification codes are one-time codes and expire. The default TTL is:
+## Why does a menu option exist but my analysis fails?
 
-```bash
-EMAIL_VERIFICATION_TTL_SECONDS=600
-```
+Menus, source code, input validation, runtime dependencies, and successful
+scientific execution are separate gates. Check the actual job log and stage state.
+A lightweight file inventory check does not establish parser compatibility.
 
-Each analysis job needs a fresh code. If the email address changes, send a new verification code.
+## Why does the GPU default differ between pages?
 
-## The uploaded zip is reported as invalid
+R, CLI, and deployment defaults are distinct. The web worker uses configured,
+validated GPU visibility. See [Defaults and tuning](parameters.md).
 
-Check:
+## Can I copy the old `sp_var_features=20` example?
 
-- Downstream analysis only accepts `.zip` uploads.
-- The zip should preferably contain only one top-level data directory.
-- Directory file names must match the requirements in [Data Preparation](data-preparation.md).
-- The zip must not exceed `MAX_UPLOAD_BYTES`.
-- After extraction, it must not contain path traversal, too many files, or an abnormal compression ratio.
+Use the documented logical control (`TRUE` or `FALSE`), not an invented feature
+count. Check the current [R parameter table](reference/r-parameters.md).
 
-## Server path mode cannot find samples
+## Why is a completed job missing an email, package, or figure?
 
-Server paths are paths on the machine running FastAPI/Celery, not paths on the browser user's computer. The alignment page supports a parent directory or comma-separated sample directories. Downstream pages require a single data directory.
+Analysis, packaging, notification, optional stage output, and retention are
+independent. Inspect all states; see [outputs](results.md). Do not infer success
+from the existence of an old image or assume absent optional output is a negative
+biological result.
 
-## Pairwise integration reports a batch-count error
+## Why do both application domains work but I must log in again?
 
-The dual-encoder logic in `main_process.py` requires two batches. Confirm that the input parent directory contains exactly two sample directories and that, after sorting, they represent the two batches.
+Session cookies are host-scoped. Use one domain consistently. Email links use the
+administrator's canonical `PUBLIC_BASE_URL`, which may be the alternate hostname.
 
-## Is `truth.txt` required?
+## Can I install everything with `requirements-docs.txt` or an unnamed Docker image?
 
-It is not mandatory in every scenario. When `truth.txt` exists, the backend writes labels to `cell_type_truth` and uses them for more complete preview/evaluation outputs. Without `truth.txt`, the wrapper runs basic preprocessing and clustering, then supplements metadata with cluster labels.
+No. Documentation dependencies only build this site. Obtain a complete matching
+scientific environment from maintainers; see [Installation](getting-started.md).
 
-## Downstream GO, CellChat, or trajectory has no result figures
+## Are the default weights and reviewer demos independent validation?
 
-These steps depend on clustering, gene annotation, species databases, expression matrix quality, and cell-type labels. A job may complete even when an optional stage does not produce valid images. First check:
-
-- Whether `cluster` was run.
-- Whether `species` was selected correctly.
-- Whether there are enough marker genes.
-- The corresponding stage status in `manifest.json`.
-- Whether worker logs include optional-step failure messages.
-
-## The result email was sent, but the link cannot be opened
-
-Possible causes:
-
-- Results have expired.
-- `PUBLIC_BASE_URL` is configured incorrectly.
-- The token has expired.
-- The result package was not built successfully.
-- The reverse proxy does not forward `/results/download/{token}` correctly.
-
-Check status first:
-
-```bash
-curl https://molo.example.org/jobs/{job_id}
-```
-
-Then check packaging and notifications worker logs.
-
-## Documentation build fails
-
-This directory uses MkDocs:
-
-```bash
-python -m pip install -r Molo_Document/requirements-docs.txt
-mkdocs build -f Molo_Document/mkdocs.yml --strict
-mkdocs build -f Molo_Document/mkdocs.en.yml --strict
-```
-
-`--strict` treats broken links, missing pages, and configuration errors as failures. After adding a page, update the `nav` section in both MkDocs configuration files.
+No. Defaults have a named selection provenance, and demo artifacts are saved
+examples. Check [provenance](provenance.md) and independently validate the
+registered scientific comparison before claiming replication or generality.

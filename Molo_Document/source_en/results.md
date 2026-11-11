@@ -1,142 +1,71 @@
-# Result Files
+# Results and limitations
 
-Molo results fall into three categories: alignment/integration outputs, downstream analysis outputs, and email download packages. The web page only shows selected preview figures. Complete results are delivered through the download package.
+Molo distinguishes analysis, packaging, and notification state. A queued response,
+a healthy web page, an old plot, and an analysis result are different evidence.
 
-## Alignment and Integration Results
+## Alignment and integration
 
-The working directory for an alignment job is:
+Typical application results live below `Molo_FastAPI/data/tasks/{job_id}/results/`.
+Python CLI output is written to the requested `-save_path` instead.
 
-```text
-Molo_FastAPI/data/tasks/{job_id}/
-```
-
-Core results are stored in:
-
-```text
-Molo_FastAPI/data/tasks/{job_id}/results/
-```
-
-Common files:
-
-| File | Description |
+| Artifact | Meaning |
 | --- | --- |
-| `Raw_Alignment_3D.png/.pdf` | 3D preview of original coordinates |
-| `Molo_Alignment_3D.png/.pdf` | 3D preview after Molo alignment |
-| `matrix.parquet` | Reconstructed or integrated expression matrix |
-| `embedding.parquet` | Low-dimensional representation |
-| `umap.parquet` | UMAP coordinates |
-| `spatial.csv` | Aligned spatial coordinates |
-| `meta.csv` | Merged metadata |
-| `integrated_molo.rds` | Integrated Molo object |
-| `alignment_info.txt` | Summary of spatial alignment method and parameters |
+| `Raw_Alignment_3D.png` / `.pdf` | Input coordinate preview |
+| `Molo_Alignment_3D.png` / `.pdf` | Aligned coordinate preview |
+| `matrix.parquet` | Decoder reconstruction in integration mode; input representation in alignment-only mode; **not a guarantee of original UMI counts** |
+| `embedding.parquet` | Learned latent representation |
+| `umap.parquet` | Derived visualization embedding |
+| `spatial.csv`, `meta.csv` | Coordinates and metadata |
+| `integrated_molo.rds` | R object from the wrapper workflow, not a guaranteed Python-only artifact |
+| `alignment_info.txt`, diagnostics/metrics JSON | Parameters, selected route, and available metric status |
 
-The web service copies selected images to:
+Exact files depend on method, mode, preprocessing, and completed stages.
+Alignment-only does not train the integration model: its saved latent/UMAP fields
+can be zero-filled format placeholders, not learned embeddings. Shared
+and private latent components have distinct meanings; the saved main embedding
+can include the complete latent representation, not only the shared component.
 
-```text
-Molo_FastAPI/plots/tmp/{job_id}/
-```
+## Downstream
 
-for page previews.
+The configured output root contains per-job directories with `manifest.json`,
+`config.json`, `logs/`, `intermediate/`, and `plots/`. Inspect actual manifest
+stage status and artifact lists. Optional GO/CellChat/trajectory output can be
+missing because of data, annotation, resources, or execution failure; it is not
+by itself a negative biological result.
 
-## Downstream Analysis Results
+## Packages, delivery, and retention
 
-The downstream analysis output root is controlled by `app/config/downstream.yaml`:
-
-```yaml
-default_output_root: "outputs/downstream"
-```
-
-Single-job directory:
-
-```text
-outputs/downstream/{job_id}/
-  config.json
-  manifest.json
-  logs/
-  intermediate/
-  plots/
-```
-
-| Directory/File | Description |
+| State field | What to check |
 | --- | --- |
-| `manifest.json` | Job stage status and previewable artifact list |
-| `logs/orchestrator.log` | Orchestration log; not included in user download packages |
-| `intermediate/*.rds` | Intermediate Molo objects passed between workers |
-| `plots/*.png`, `plots/*.pdf` | Main figures shown in the page preview and included in download packages |
+| `analysis_status` | queued/running/completed/failed/expired and current stage |
+| `package_status` | Whether packaging is ready, pending, failed, or not applicable |
+| `delivery_status` | Whether notification was sent, failed, retried, or uncertain |
+| Progress/stage fields | Coarse execution progress, not an accuracy estimate |
 
-### Manifest Example
+A completed analysis can still fail packaging or SMTP delivery. Result packages
+are built by a separate queue with path/suffix/sensitivity filtering; internal
+logs, private settings, and raw uploads are not a substitute for user deliverables.
 
-```json
-{
-  "job_id": "00000000-0000-0000-0000-000000000000",
-  "status": "completed",
-  "stages": {
-    "creation": "completed",
-    "reduction": "completed",
-    "go": "completed"
-  },
-  "artifacts": {
-    "reduction": ["Molo_clusters_UMAP.png"],
-    "go": ["Molo_GO_Enrichment/example.png"]
-  },
-  "error": null
-}
-```
+The example runtime retention is 48 hours. Actual policy is administrator-configured
+and requires active cleanup scheduling. Expired records may remain after result
+files are removed. Download and preserve authorized outputs and provenance before
+expiry; do not rely on indefinite hosted storage.
 
-## Download Package
+## Scientific interpretation
 
-The packaging job generates:
+- Use real independent labels when a metric requires them; clustering pseudo-labels
+  are not equivalent to ground truth. AD/Normal demos explicitly lack truth labels.
+- Report exact iLISI normalization, evaluation population, and direction. Different
+  definitions cannot be combined as if identical.
+- Alignment accuracy variants differ in coverage and bidirectional penalties.
+  Keep their formulas and evaluated points separate.
+- Full latent integration supports two batches. Multi-slice alignment alone is
+  not evidence that the full model supports arbitrary numbers of batches.
+- The saved checkpoint contains an encoder component only; do not claim a full
+  retrain-free model restoration from it.
+- Default weights are selected settings from a named study, not independent
+  validation across every platform.
+- A pretraining argument or a seed helper in source is not proof those phases or
+  seed settings were executed. Preserve run-level parameters and logs.
 
-```text
-Molo_FastAPI/data/packages/{job_id}/
-```
-
-containing:
-
-```text
-molo-results-{job_id}-{sha256}.zip
-```
-
-The download package contains:
-
-```text
-README.txt
-manifest.json
-results/
-  ...
-```
-
-Allowed suffixes in download packages:
-
-```text
-.rds .h5ad .parquet .png .pdf .csv .tsv .txt .json
-```
-
-The following content is excluded:
-
-- Original uploaded files.
-- Internal `config.json`, runtime logs, stdout/stderr, traceback.
-- Parameters containing paths, emails, tokens, secrets, passwords, or similar sensitive fields.
-- Files with non-allowlisted suffixes.
-
-## Status Fields
-
-Main fields returned by public status APIs:
-
-| Field | Description |
-| --- | --- |
-| `analysis_status` | `queued`, `running`, `completed`, `failed`, `expired`, and similar states |
-| `package_status` | `pending`, `running`, `ready`, `failed`, or `not_applicable` |
-| `delivery_status` | `pending`, `sent`, `retrying`, `failed`, `unknown` |
-| `progress` | Coarse progress from 0 to 100 |
-| `current_stage` | Currently running stage |
-| `stages` | Stage status from the downstream manifest |
-| `output_available` | Whether the download package is available |
-| `retained_until` | Result retention expiration time |
-
-Status troubleshooting priority:
-
-1. `analysis_status=failed`: first check the worker log for the corresponding task and Job ID.
-2. `analysis_status=completed` but `package_status=failed`: check the packaging worker.
-3. `package_status=ready` but `delivery_status=failed`: check SMTP and the resend API.
-4. `status=expired`: results have been removed according to the retention policy and must be regenerated.
+See [source provenance](provenance.md) for the scope of this documentation audit.

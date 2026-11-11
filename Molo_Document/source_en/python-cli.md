@@ -1,170 +1,83 @@
 # Python CLI
 
-Molo provides a Python command-line entry point for developers who want to run the core pairwise integration algorithm directly, benchmark methods, or bypass the web form for batch processing.
+Use `Molo_FastAPI/app/core/python/main_process.py` in the complete scientific
+runtime, not in the documentation virtual environment. The script imports
+scientific dependencies; simply importing it is not a read-only validation step.
 
-## Core Entry Point
+## Pairwise integration
 
-```text
-Molo_FastAPI/app/core/python/main_process.py
-```
-
-This entry point reads a preformatted parquet input directory, runs spatial alignment, graph construction, dual-encoder training, UMAP/iLISI calculation, and result saving.
-
-!!! warning "Runtime limitation"
-    The dual-encoder logic in `main_process.py` requires exactly two batches. If the input directory does not contain exactly two samples, it raises a batch-count error.
-
-## Input Directory
-
-```text
-molo_input/
-  Molo1/
-    Count.parquet
-    SCT.parquet
-    spatial.parquet
-    meta.parquet
-  Molo2/
-    Count.parquet
-    SCT.parquet
-    spatial.parquet
-    meta.parquet
-```
-
-Matrix parquet files must include a `cells` column. The row order of `spatial.parquet` and `meta.parquet` must match the matrices.
-
-## Example Run
+Prepare the [parquet inputs](data-preparation.md), then run from the source root:
 
 ```bash
-cd <repository-root>
 conda activate Molo
-
 python -u Molo_FastAPI/app/core/python/main_process.py \
-  -data_path examples/molo_input \
-  -save_path outputs/molo_output \
-  -device cuda:0 \
+  -data_path ./molo_input \
+  -save_path ./results/pairwise \
+  -device cpu \
   -sp_alignment Molo \
-  -pre_train_epoch 100 \
+  -molo_alignment_route three_stage \
   -train_epoch 300 \
   -compute_iLISI 1 \
-  -use_harmony 0 \
-  -edge_sp 10 \
-  -edge_mtx 10 \
-  -h_dims 250 \
   -r_dims 30 \
-  -shared_dims 20 \
-  -sample_size 512
+  -shared_dims 20
 ```
 
-Run spatial alignment only without training the integration model:
+This command explicitly overrides parser defaults (`device="cuda:1"`, route
+`auto`, `train_epoch=600`, `compute_iLISI=0`). Use a verified visible CUDA device
+when appropriate. The script falls back to CPU when CUDA is unavailable; an
+invalid GPU index on a CUDA-capable host is not guaranteed to fall back.
+
+Full latent integration requires exactly two batches and `shared_dims < r_dims`.
+Keep inputs and each run's output separate; do not overwrite an earlier experiment.
+
+## Spatial alignment only
 
 ```bash
 python -u Molo_FastAPI/app/core/python/main_process.py \
-  -data_path examples/molo_input \
-  -save_path outputs/alignment_output \
-  -device cuda:0 \
+  -data_path ./molo_input \
+  -save_path ./results/alignment_only \
+  -device cpu \
   -sp_alignment Molo \
+  -molo_alignment_route three_stage \
   -alignment_only 1
 ```
 
-## Common Parameters
+Alignment-only output does not establish successful full integration. `auto` can
+select a different route; keep diagnostics of the route actually executed.
 
-| Parameter | Default | Description |
-| --- | --- | --- |
-| `-data_path` | required | Input parent directory |
-| `-save_path` | required | Output directory |
-| `-device` | `cuda:1` | PyTorch device; automatically falls back to CPU when CUDA is unavailable |
-| `-sp_alignment` | `Molo` | Spatial alignment method |
-| `-pre_train_epoch` | `200` | Number of pretraining epochs; the main workflow primarily uses the training phase |
-| `-train_epoch` | `600` | Number of training epochs |
-| `-compute_iLISI` | `0` | Whether to compute iLISI |
-| `-alignment_only` | `0` | Whether to run spatial alignment only |
-| `-edge_type` | `together` | Graph edge source: `spatial`, `count`, or `together` |
-| `-edge_sp` | `10` | Number of spatial KNN neighbors |
-| `-edge_mtx` | `10` | Number of expression-matrix KNN neighbors |
-| `-h_dims` | `250` | Hidden dimension |
-| `-r_dims` | `30` | Latent dimension |
-| `-shared_dims` | `20` | Shared latent dimension; must be smaller than `-r_dims` |
-| `-sample_size` | `512` | Sample count used by the sampling loss |
+## Exact options and R/CLI mappings
 
-## Output Files
+All 37 parser flags are in [Complete CLI options](reference/cli-options.md).
+Important differences:
 
-```text
-molo_output/
-  matrix.parquet
-  embedding.parquet
-  umap.parquet
-  spatial.csv
-  meta.csv
-  alignment_info.txt
-  Molo_Alignment_3D.png
-  Raw_Alignment_3D.png
-  iLISI.txt
-  ilisi_values.csv
-  Molo1/
-    matrix.parquet
-    embedding.parquet
-    umap.parquet
-    spatial.csv
-    meta.csv
-  Molo2/
-    ...
-```
+| R argument | CLI flag |
+| --- | --- |
+| `pretrain_epoch` | `-pre_train_epoch` |
+| `hidden_dims` | `-h_dims` |
+| `reduction_dims` | `-r_dims` |
+| `pis_path` | `-paste2_pis_path` |
+| `mnn_loss`, `nc_loss`, `gme_loss`, `la_loss` | `-mnn`, `-nc`, `-gme`, `-la` |
+| `mse_loss`, `rec_loss` | `-mse`, `-rec` |
 
-The actual files depend on `-sp_alignment`, `-alignment_only`, and whether metrics are computed.
+The accepted distance-threshold default is `None`/automatic, not a fixed 5.0.
+The parser also accepts nullable text representations before converting a numeric
+threshold. Do not pass R logical literals as Python integer flag values: use 0/1.
 
-## Prepare Parquet Files from AnnData
+## Pretraining, seeding, and checkpoints
 
-The example below converts two `.h5ad` files into the format required by the Molo Python CLI. Adjust `batch_name`, spatial coordinates, and normalized matrix source according to your data.
+`-pre_train_epoch` is accepted and recorded, but the main loop uses
+`range(train_epoch)`; this does not establish a separate executed pretraining
+phase. The top-level seed-setting call is commented out. Record actual seed
+behavior rather than claiming all runs deterministic.
 
-```python
-from pathlib import Path
+The saved checkpoint is an encoder component. It is not sufficient by itself to
+restore the full dual-stream model. Output matrices, metrics, and provenance must
+be retained separately; see [results](results.md).
 
-import numpy as np
-import pandas as pd
-import scanpy as sc
-import scipy.sparse as sp
+## Benchmark scripts
 
-
-def _dense(matrix):
-    return matrix.toarray() if sp.issparse(matrix) else np.asarray(matrix)
-
-
-def write_sample(adata, out_dir: Path, layer=None):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    genes = list(map(str, adata.var_names))
-    cells = list(map(str, adata.obs_names))
-
-    count_matrix = adata.layers[layer] if layer else adata.X
-    count = pd.DataFrame(_dense(count_matrix), columns=genes)
-    count["cells"] = cells
-    count.to_parquet(out_dir / "Count.parquet", index=False)
-
-    sct = pd.DataFrame(_dense(adata.X), columns=genes)
-    sct["cells"] = cells
-    sct.to_parquet(out_dir / "SCT.parquet", index=False)
-
-    spatial = pd.DataFrame(adata.obsm["spatial"], columns=["x", "y"])
-    spatial.to_parquet(out_dir / "spatial.parquet", index=False)
-
-    meta = adata.obs.reset_index(names="cell_id")
-    meta.to_parquet(out_dir / "meta.parquet", index=False)
-
-
-root = Path("molo_input")
-write_sample(sc.read_h5ad("sample_1.h5ad"), root / "Molo1")
-write_sample(sc.read_h5ad("sample_2.h5ad"), root / "Molo2")
-```
-
-## AD/Normal Benchmark Script
-
-The repository `Integrate/` directory provides an AD/Normal benchmark, including comparison workflows for Original, Harmony, Seurat, STAligner, and Molo.
-
-```bash
-cd <repository-root>
-conda activate Molo
-python -u Integrate/run_molo_ad_normal.py \
-  --cache-dir Integrate/results/AD_and_Normal/cache \
-  --output-dir Integrate/results/AD_and_Normal/Molo \
-  --device cuda:0
-```
-
-For the complete benchmark notes, see `Integrate/README_AD_Normal_benchmark.md`.
+Historical benchmark/research scripts have moved under `TESTTOOLS/` in the
+examined working tree. Some retain earlier root assumptions. This tutorial does
+not advertise an unverified `Integrate/` command or claim that a benchmark was
+reproduced during the documentation update. Review each protocol, data source,
+paths, split rules, and environment before running a research script.

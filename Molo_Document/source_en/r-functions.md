@@ -1,239 +1,151 @@
-# R Function Reference
+# R function reference
 
-This page only describes the R-level analysis functions. For web service installation, Nginx, systemd, Redis, and public access configuration, see [Web Service Deployment](deployment.md).
+This page documents **R functions** (RTD `/api/`; self-hosted `/en/r-functions/`).
+For web endpoints, use the
+[HTTP API guide](api.md). Defaults and signatures below are tied to the
+2026-11-11 current-source audit, not the historical Shiny release.
 
-## Function Relationships
+Every argument and its exact default expression is in
+[Complete R parameters](reference/r-parameters.md). This page explains their roles.
 
-| Function | Purpose | Common call site |
-| --- | --- | --- |
-| `Molo_Create()` | Create a Molo object from a platform directory | Object creation worker, R batch scripts |
-| `Molo_reduction_cluster()` | QC, normalization, dimensionality reduction, clustering, and spatial graph | Downstream `cluster` stage |
-| `Molo_var_features()` | Spatially variable feature and marker gene analysis | Downstream visualization or batch processing |
-| `Molo_top_GO_terms()` | GO enrichment analysis | Downstream `go` stage |
-| `Molo_cell_chat()` | CellChat cell-cell communication analysis | Downstream `cellchat` stage |
-| `Molo_traj()` | Monocle3 trajectory inference | Downstream `trajectory` stage |
-| `Molo_Integrate()` | Multi-object spatial alignment and expression integration | Alignment wrapper, R batch scripts |
-| `Molo_Pipeline()` | Chain basic downstream analysis steps | R batch scripts |
+## Molo_Create
 
-## `Molo_Create()`
+Creates a Molo object from a platform directory. Main arguments:
 
-Create a Molo object from a structured input directory.
-
-| Parameter | Description |
-| --- | --- |
-| `data_type` | Data platform type, such as `Visium`, `Slide-seq`, `MERFISH`, `CosMx`, `Xenium`, `ATAC`, `CODEX`, `Stereo-seq`, or `Custom` |
-| `folder_path` | Input data directory |
-| `n_cells` | Optional number of cells/spots to sample |
-| `n_features` | Optional number of features to sample |
-| `ATAC_dataset` | ATAC reference species, `mouse` or `human` |
-| `ATAC_arrow_files` | Optional existing ArchR ArrowFiles to reuse |
-| `CODEX_type` | CODEX input type |
-| `softmax` | Whether to apply softmax normalization |
-| `custom_index` | Cell ID column name in Custom data |
+- `data_type`: reader/platform selector; match the exact supported spelling.
+- `folder_path`: input directory, not a ZIP file.
+- `n_cells`, `n_features`: optional sampling limits, not a replacement for QC.
+- `ATAC_dataset`, `ATAC_arrow_files`: ATAC species/reference and optional existing ArrowFiles.
+- `CODEX_type`, `softmax`: imaging input/normalization options.
+- `custom_index`: cell identifier column for Custom data.
 
 ```r
-molo_obj <- Molo_Create(
-  data_type = "Visium",
-  folder_path = "data/visium_sample",
-  n_cells = 2000,
-  n_features = 3000
-)
+molo_obj <- Molo_Create(data_type = "Visium", folder_path = "./visium/")
 ```
 
-## `Molo_reduction_cluster()`
+## Molo_reduction_cluster
 
-Run QC, normalization, PCA/UMAP, adjacency graph construction, and clustering on a Molo object.
+Performs QC, reduction, clustering, and associated spatial/neighborhood analysis.
+Supply `obj`, `molo_plot_path`, and an appropriate `molo_env` for your machine.
 
-| Parameter | Description |
-| --- | --- |
-| `obj` | Input Molo object |
-| `only_QC` | Whether to run quality control only |
-| `nFeature_range` | Feature-count filtering range |
-| `nCount_range` | Count/UMI filtering range |
-| `molo_env` | Runtime environment configuration |
-| `labeled_ref` | Optional reference annotation object |
-| `molo_plot_path` | Image output directory |
-| `save_type` | Image save type |
-| `run_Banksy` | Whether to enable Banksy spatial clustering |
-| `image_alpha` | Spatial image opacity |
-| `pt_size` | Spatial point size |
-| `atac_steps` | Depth of ATAC analysis steps |
-| `resolution` | Clustering resolution |
-| `n_neighbors` | Number of KNN/SNN neighbors |
-| `show_progress` | Whether to show progress |
+- R generic defaults include `resolution=0.5`, `n_neighbors=20`,
+  `nFeature_range=c(10, 2500)`, and `nCount_range=c(10,2500)`.
+- The web handler instead declares `n_neighbors=30`. These are separate interfaces.
+- `only_QC`, `run_Banksy`, `labeled_ref`, `atac_steps`, and plotting settings
+  control additional behavior. A reference annotation must have known provenance.
+- The built-in environment path is a legacy placeholder; override it explicitly.
 
 ```r
 molo_obj <- Molo_reduction_cluster(
   obj = molo_obj,
-  only_QC = FALSE,
-  nFeature_range = c(200, 2500),
-  nCount_range = c(500, 15000),
-  molo_plot_path = "outputs/plots/visium",
+  molo_env = "/path/to/miniconda3/envs/Molo/",
+  molo_plot_path = "./plots/",
   resolution = 0.5,
-  n_neighbors = 30
+  n_neighbors = 20,
+  show_progress = TRUE
 )
 ```
 
-## `Molo_var_features()`
+## Molo_var_features
 
-Identify spatially variable features and marker genes, and write the corresponding figures.
-
-| Parameter | Description |
-| --- | --- |
-| `obj` | Input Molo object |
-| `features` | Optional feature set to analyze |
-| `sp_var_features` | Number of spatially variable features; `FALSE` means no fixed-count selection |
-| `molo_plot_path` | Image output directory |
-| `save_type` | Image save type |
-| `font_size` | Text size configuration in plots |
-| `image_alpha` | Spatial image opacity |
-| `pt_size` | Expression point size |
-| `show_progress` | Whether to show progress |
+Identifies/visualizes variable features. `features=NULL` lets the implementation
+select features; `sp_var_features=FALSE` is a **logical control**, not a count of
+features. The earlier tutorial's `sp_var_features=20` example was misleading.
+Supply `molo_plot_path`. Plot defaults include `save_type="graph"`,
+`image_alpha=1`, `pt_size=2`, and `show_progress=FALSE`.
 
 ```r
 molo_obj <- Molo_var_features(
-  obj = molo_obj,
-  sp_var_features = 20,
-  molo_plot_path = "outputs/plots/visium"
+  obj = molo_obj, sp_var_features = FALSE, molo_plot_path = "./plots/"
 )
 ```
 
-## `Molo_top_GO_terms()`
+## Molo_top_GO_terms
 
-Run GO enrichment analysis based on clusters or annotations.
-
-| Parameter | Description |
-| --- | --- |
-| `obj` | Molo object containing cluster or cell-type information |
-| `dataset` | Species database, `mouse` or `human` |
-| `plot_cols` | Optional custom colors |
-| `molo_plot_path` | GO image output directory |
-| `font_size` | Text size configuration in plots |
-| `show_progress` | Whether to show progress |
+GO enrichment for an appropriately annotated/clustered object. `dataset="mouse"`
+is the default; use `"human"` when appropriate. `plot_cols` controls group colors,
+`font_size=NULL` delegates text sizing, and `molo_plot_path` is required.
+Species/reference resources must match the input gene identifiers.
 
 ```r
 molo_obj <- Molo_top_GO_terms(
-  obj = molo_obj,
-  dataset = "mouse",
-  molo_plot_path = "outputs/plots/visium"
+  obj = molo_obj, dataset = "mouse", molo_plot_path = "./plots/"
 )
 ```
 
-## `Molo_cell_chat()`
+## Molo_cell_chat
 
-Run CellChat-based cell-cell communication analysis.
-
-| Parameter | Description |
-| --- | --- |
-| `obj` | Molo object containing cell-type or cluster labels |
-| `plot_cols` | Optional custom cell-group colors |
-| `dataset` | Species database, `mouse` or `human` |
-| `molo_plot_path` | Cell-cell communication image output directory |
-| `font_size` | Text size configuration in plots |
-| `show_progress` | Whether to show progress |
+CellChat-based communication analysis with `dataset="mouse"` by default. Meaningful
+cell/group annotation, a suitable ligand-receptor database, and the corresponding
+R environment are required. Missing or unsuitable data may yield no valid output;
+this is not evidence that biological communication is absent.
 
 ```r
 molo_obj <- Molo_cell_chat(
-  obj = molo_obj,
-  dataset = "mouse",
-  molo_plot_path = "outputs/plots/visium"
+  obj = molo_obj, dataset = "mouse", molo_plot_path = "./plots/"
 )
 ```
 
-## `Molo_traj()`
+## Molo_traj
 
-Run trajectory inference with Monocle3.
-
-| Parameter | Description |
-| --- | --- |
-| `obj` | Molo object containing dimensionality reduction results |
-| `plot_cols` | Optional custom trajectory colors |
-| `molo_plot_path` | Trajectory image output directory |
-| `show_progress` | Whether to show progress |
+Monocle3 trajectory inference. Requires a compatible reduced/annotated object and
+trajectory environment. `plot_cols=NULL` and `show_progress=FALSE` are the current
+generic defaults. A computed pseudotime is not a validated developmental direction.
 
 ```r
-molo_obj <- Molo_traj(
-  obj = molo_obj,
-  molo_plot_path = "outputs/plots/visium"
-)
+molo_obj <- Molo_traj(obj = molo_obj, molo_plot_path = "./plots/")
 ```
 
-## `Molo_Integrate()`
+## Molo_Integrate
 
-Call the Python core to run spatial alignment and expression integration.
+Registers input Molo objects and runs integration unless `alignment_only=TRUE`.
+Full latent integration currently accepts **two objects/batches**. Important groups:
 
-| Parameter | Description |
+| Group | Parameters |
 | --- | --- |
-| `obj_list` | Input list of Molo objects |
-| `var_features` | Number of highly variable features |
-| `py_path` | Python interpreter command or path |
-| `device` | Training device, such as `cuda:0` or `cpu` |
-| `save_path` | Integration result output directory |
-| `pretrain_epoch` | Number of pretraining epochs |
-| `train_epoch` | Number of main training epochs |
-| `tmp` | Intermediate file directory |
-| `sp_alignment` | Spatial alignment method |
-| `lpgw_ref_idx` | LPGW reference sample index |
-| `gene_align_alpha` | Gene-alignment loss weight |
-| `edge_type` | Graph edge source, `spatial`, `count`, or `together` |
-| `edge_sp` | Number of spatial KNN neighbors |
-| `edge_mtx` | Number of expression KNN neighbors |
-| `hidden_dims` | Hidden dimension |
-| `reduction_dims` | Latent dimension |
-| `shared_dims` | Shared latent dimension |
-| `compute_iLISI` | Whether to compute iLISI |
-| `alignment_only` | Whether to perform spatial alignment only |
-| `verbose` | Whether to print runtime information |
+| Input/export | `obj_list`, `var_features`, `tmp`, `save_path`, `py_path` |
+| Compute/training | `device`, `pretrain_epoch`, `train_epoch`, `sample_size` |
+| Physical registration | `sp_alignment`, `molo_alignment_route`, `alignment_only`, `lpgw_ref_idx`, `gene_align_alpha`, `gene_glmpca_latent_dim`, `gene_overlap_frac` |
+| Geometry/plots | `plot_3D_width`, `plot_3D_height`, `plot_3D_spot_size`, `dist_threshold`, `pis_path`, `sp_alignment_s` |
+| Graph/model | `edge_type`, `edge_sp`, `edge_mtx`, `hidden_dims`, `reduction_dims`, `shared_dims` |
+| Loss/latent weights | `mse_loss`, `rec_loss`, `mnn_loss`, `nc_loss`, `gme_loss`, `la_loss`, `shared_scale`, `private_scale` |
+| Evaluation | `use_harmony`, `compute_iLISI`, `verbose` |
+| Tuning | `tuning_mode`, `tune_preset`, `tune_trials`, `tuning_objective` |
+
+Current R defaults include `py_path=Sys.which("python")`, `device="cuda:1"`,
+`sp_alignment="Molo+LPGW"`, `molo_alignment_route="auto"`, and
+`dist_threshold=NULL`. The website passes its own method/device values, so these
+are **not** necessarily the effective web defaults.
 
 ```r
 integrated_obj <- Molo_Integrate(
-  obj_list = list(sample_1, sample_2),
-  var_features = 3000,
-  py_path = "python",
-  device = "cuda:0",
-  save_path = "outputs/integration",
-  tmp = "outputs/tmp/integration",
-  sp_alignment = "Molo+LPGW",
-  train_epoch = 300
+  obj_list = list(molo1, molo2),
+  py_path = "/path/to/miniconda3/envs/Molo/bin/python",
+  device = "cpu",  # or a verified GPU visible to this process
+  sp_alignment = "Molo",
+  molo_alignment_route = "three_stage",
+  train_epoch = 300,
+  save_path = "./results/pairwise/",
+  tmp = "./results/pairwise/tmp/"
 )
 ```
 
-`Molo_Integrate()` locates `Molo_FastAPI/app/core/python/main_process.py` internally. When running outside the repository root, set `MOLO_PROJECT_ROOT` or `MOLO_MAIN_PROCESS`.
+This example **overrides** the R route default to request three-stage alignment;
+`auto` does not guarantee that route. `pretrain_epoch` is recorded/passed, but do
+not infer a separately executed pretraining phase. See [defaults](parameters.md)
+and [limitations](results.md).
 
-## `Molo_Pipeline()`
+## Molo_Convert, Molo_save_data, Molo_Pipeline
 
-Chain object QC, dimensionality reduction and clustering, spatially variable features, GO, CellChat, and trajectory analysis.
+- `Molo_Convert` bridges Molo and Seurat representations. Set `start`, `end`,
+  `data_type`, `assay`, and `folder_path` as appropriate to the conversion path.
+- `Molo_save_data` exports preprocessing-dependent parquet inputs. Its
+  `prefer_sct` switch controls SCT preference; fallback scaling is not identical
+  to SCT normalization. Do not label arbitrary normalized AnnData values as SCT.
+- `Molo_Pipeline` chains downstream R functions. Its step names differ from HTTP
+  step names; see [Basic R pipeline](basic-pipeline.md).
+- `Molo_reduction_1` is a lower-level reduction helper with explicit environment
+  and plot-path arguments; prefer the documented cluster wrapper when appropriate.
 
-| Parameter | Description |
-| --- | --- |
-| `molo_obj` | Input Molo object |
-| `only_QC` | Whether to run QC only |
-| `steps` | Steps to run, such as `reduction_clustering`, `var_features`, `top_GO_terms`, `cellchat`, `traj_infer` |
-| `atac_steps` | Depth of ATAC analysis steps |
-| `nCount_range` | Count/UMI filtering range |
-| `nFeature_range` | Feature-count filtering range |
-| `plot_path` | Image output directory |
-| `dataset` | Species database, `mouse` or `human` |
-| `molo_env` | Runtime environment configuration |
-| `labeled_ref` | Optional reference annotation object |
-| `run_Banksy` | Whether to enable Banksy |
-| `save_type` | Image save type |
-| `image_alpha` | Spatial image opacity |
-| `pt_size` | Spatial point size |
-| `var_features` | Feature set to analyze |
-| `sp_var_features` | Number of spatially variable features |
-| `plot_cols` | Optional custom colors |
-| `show_progress` | Whether to show progress |
-| `return_obj` | Whether to return the processed Molo object |
-
-```r
-molo_obj <- Molo_Pipeline(
-  molo_obj = molo_obj,
-  steps = c("reduction_clustering", "top_GO_terms", "cellchat"),
-  nCount_range = c(500, 15000),
-  nFeature_range = c(200, 2500),
-  plot_path = "outputs/plots/visium",
-  dataset = "mouse",
-  run_Banksy = FALSE
-)
-```
+Full signatures, including required arguments and nullable defaults, are in
+[Complete R parameters](reference/r-parameters.md).
